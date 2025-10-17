@@ -1,0 +1,34 @@
+[
+  {
+    "id": 1,
+    "name": "二手自行车",
+    "description": "Specialized",
+    "contact": "18952050888",
+    "create_time": "2025-10-16 20:11:04"
+  },
+  {
+    "id": 3,
+    "name": "鼠标",
+    "description": "罗技",
+    "contact": "18952050888",
+    "create_time": "2025-10-16 20:46:58"
+  },
+  {
+    "id": 4,
+    "name": "动漫头像01",
+    "category": "其他",
+    "description": "银狼",
+    "contact": " 2364305645",
+    "image": "images\\item_4_20251016_212755.jpeg",
+    "create_time": "2025-10-16 21:27:55"
+  },
+  {
+    "id": 5,
+    "name": "动漫头像02",
+    "category": "玩具",
+    "description": "珂莱塔",
+    "contact": "Zrp1030@sjtu.edu.cn",
+    "image": "images\\item_5_20251017_132247.webp",
+    "create_time": "2025-10-17 13:22:47"
+  }
+]
