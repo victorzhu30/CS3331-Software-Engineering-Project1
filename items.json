@@ -32,12 +32,12 @@
     "create_time": "2025-10-17 13:22:47"
   },
   {
-    "id": 6,
-    "name": "鼠标",
-    "category": "数码",
-    "description": "Silver Wolf Official",
-    "contact": "2364305645",
-    "image": null,
-    "create_time": "2025-10-18 15:08:31"
+    "id": 7,
+    "name": "后藤一里的吉他",
+    "category": "乐器",
+    "description": "Custom白卡黑",
+    "contact": "57125858",
+    "image": "images\\item_7_20251018_191922.png",
+    "create_time": "2025-10-18 19:19:22"
   }
 ]

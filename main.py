@@ -6,12 +6,12 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from utils.contact import format_contact
+from utils.auth import show_welcome
 
 load_dotenv()
 
 # 数据存储文件
-DATA_FILE = "items.json"
-IMAGE_DIR = "images"
+from constants import DATA_FILE, IMAGE_DIR, USERS_FILE
 
 # 创建图片存储目录
 if not os.path.exists(IMAGE_DIR):
@@ -24,6 +24,32 @@ from constants import CATEGORIES
 # 确保 style.css 和 app.py 文件在同一个目录下
 with open("style.css", "r", encoding="utf-8") as f:
     custom_css = f.read()
+
+# 用户管理功能
+def load_users():
+    """加载用户数据"""
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    # 默认用户
+    default_users = {
+        "admin": "admin123",
+        "user1": "password1"
+    }
+    save_users(default_users)
+    return default_users
+
+def save_users(users):
+    """保存用户数据"""
+    with open(USERS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(users, f, ensure_ascii=False, indent=2)
+
+def authenticate(username, password):
+    """验证用户登录"""
+    users = load_users()
+    if username in users and users[username] == password:
+        return True
+    return False
 
 # 初始化数据
 def load_items():
@@ -221,8 +247,17 @@ def search_items(keyword, category_filter):
 # 创建Gradio界面
 with gr.Blocks(title="物品复活平台", css=custom_css) as app:
     gr.Markdown(value="# 🔄 物品复活平台")
-    gr.Markdown(value="让闲置物品找到新主人！")
+    gr.Markdown(value="## 让闲置物品找到新主人！")
+
+    # 添加欢迎信息和登出按钮
+    with gr.Row():
+        with gr.Column(scale=4):
+            welcome_msg = gr.Markdown()
+        with gr.Column(scale=1):
+            logout_button = gr.Button("🚪 退出登录", link="/logout", variant="secondary")
     
+    app.load(show_welcome, None, welcome_msg)
+
     with gr.Tab(label="📝 添加物品"):
         with gr.Row():
             with gr.Column():
@@ -234,7 +269,7 @@ with gr.Blocks(title="物品复活平台", css=custom_css) as app:
                     label="物品分类*"
                 )
                 add_desc = gr.Textbox(label="物品描述", placeholder="描述物品的状态、价格等", lines=3)
-                add_contact = gr.Textbox(label="联系方式*", placeholder="例如：微信号、QQ号、手机号")
+                add_contact = gr.Textbox(label="联系方式*", placeholder="例如：邮箱、QQ号、手机号")
                 add_image = gr.Image(label="物品图片（可选）", type="filepath")
                 # C:\Users\Victor\AppData\Local\Temp\gradio\9276db2d12094d403b50fa0616889f4c0344535778c973500e676acfe2344928\1.jpeg
                 add_btn = gr.Button(value="添加物品", variant="primary")
@@ -292,7 +327,9 @@ if __name__ == "__main__":
     image_dir_absolute = os.path.abspath(IMAGE_DIR)
     app.launch(
         share=False,
-        allowed_paths=[image_dir_absolute]  # 使用绝对路径    
+        allowed_paths=[image_dir_absolute],  # 使用绝对路径
+        auth=authenticate,  # 使用自定义认证函数
+        auth_message="🔐 请登录物品复活平台\n\n默认账号:\n用户名: admin 密码: admin123\n用户名: user1 密码: password1"    
     )
     # allowed_paths: List of complete filepaths or parent directories that gradio is allowed to serve. 
     # Must be absolute paths. Warning: if you provide directories, any files in these directories or their subdirectories are accessible to all users of your app. Can be set by comma separated environment variable GRADIO_ALLOWED_PATHS. These files are generally assumed to be secure and will be displayed in the browser when possible. 

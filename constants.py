@@ -3,3 +3,7 @@ CATEGORIES = [
     "票券", "衣饰", "鞋包", "运动", "文具", 
     "玩具", "乐器", "其他"
 ]
+
+DATA_FILE = "items.json"
+IMAGE_DIR = "images"
+USERS_FILE = "users.json" 
