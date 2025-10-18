@@ -46,28 +46,6 @@
 - **样式**: 自定义 CSS (style.css)
 - **配置管理**: python-dotenv
 
-## 项目结构
-
-```
-CS3331-Software-Engineering-Project1/
-├── main.py              # 主程序入口
-├── constants.py         # 常量定义（物品分类等）
-├── items.json           # 物品数据存储
-├── style.css            # 自定义样式表
-├── images/              # 物品图片存储目录
-├── utils/               # 工具模块
-│   └── database.py      # 数据库操作（待开发）
-├── __pycache__/         # Python 缓存文件
-├── .env                 # 环境变量配置
-├── .gitignore           # Git 忽略文件
-├── grammar.md           # Python 语法笔记
-├── todo.md              # 待办事项
-├── filepath_test.py     # 文件路径测试
-├── display_test.py      # 显示功能测试
-├── LICENSE              # 开源协议
-└── README.md            # 项目说明文档
-```
-
 ## 安装与运行
 
 ### 环境要求
@@ -159,24 +137,16 @@ python main.py
 - 删除物品时自动清理关联图片
 - 使用 Gradio 的文件访问机制展示图片
 
-### 主要函数
-
-- `load_items()`: 从 JSON 文件加载物品数据
-- `save_items(items)`: 保存物品数据到 JSON 文件
-- `add_item(name, category, description, contact, image)`: 添加新物品
-- `delete_item(item_id)`: 删除指定物品
-- `get_items_list()`: 生成物品列表 HTML
-- `search_items(keyword, category_filter)`: 搜索物品
-
 ## 待实现功能
 
-- [✅] 多标签检索 
+[✅] 多标签检索 
 - [ ] 用户身份认证(查看自己上传的物品)
-- [ ] 迁移到 Flask/FastAPI 框架
 - [ ] 使用 MySQL 数据库替代 JSON 文件
-- [ ] 电话/邮箱自动识别并生成链接
+
+[✅] 邮箱/手机号/QQ号自动识别并生成链接
 - [ ] 物品编辑功能
 - [ ] 物品状态管理（已售出/已赠送）
+- [ ] 迁移到 Flask/FastAPI 框架
 
 ## 项目亮点
 

@@ -5,6 +5,8 @@ import shutil
 from datetime import datetime
 from dotenv import load_dotenv
 
+from utils.contact import format_contact
+
 load_dotenv()
 
 # 数据存储文件
@@ -147,8 +149,8 @@ def get_items_list():
         else:
             image_tag = '<div class="item-image" style="background: #f5f5f5; display: flex; align-items: center; justify-content: center; color: #999;">暂无图片</div>'
         
-        # 区分QQ/微信/手机号/邮箱
-        ## TODO
+        # 格式化联系方式
+        contact_html = format_contact(item['contact'])
 
         display_cards_html += f"""
         <div class="item-card">
@@ -157,7 +159,7 @@ def get_items_list():
             <div class="item-id">ID: {item['id']}</div>
             <div class="item-name">{item['name']}</div>
             <div class="item-desc">{item.get('description', '无描述')}</div>
-            <div class="item-contact">📞 {item['contact']}</div>
+            {contact_html}
             <div class="item-time">⏰ {item['create_time']}</div>
         </div>
         """
@@ -198,6 +200,9 @@ def search_items(keyword, category_filter):
         else:
             image_tag = '<div class="item-image" style="background: #f5f5f5; display: flex; align-items: center; justify-content: center; color: #999;">暂无图片</div>'
         
+        # 格式化联系方式
+        contact_html = format_contact(item['contact'])
+
         search_cards_html += f"""
         <div class="item-card">
             {image_tag}
@@ -205,7 +210,7 @@ def search_items(keyword, category_filter):
             <div class="item-id">ID: {item['id']}</div>
             <div class="item-name">{item['name']}</div>
             <div class="item-desc">{item.get('description', '无描述')}</div>
-            <div class="item-contact">📞 {item['contact']}</div>
+            {contact_html}
             <div class="item-time">⏰ {item['create_time']}</div>
         </div>
         """
