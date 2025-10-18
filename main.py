@@ -168,10 +168,16 @@ def get_items_list():
 # 查找物品 - 卡片式
 def search_items(keyword, category_filter):
     items = load_items()
+    if not category_filter:
+        category_filter = "全部"
     
     # 分类筛选
-    if category_filter and category_filter != "全部":
-        items = [item for item in items if item.get('category') == category_filter]
+    if isinstance(category_filter, str):
+        if category_filter != "全部":
+            items = [item for item in items if item.get('category') == category_filter]
+    elif isinstance(category_filter, list):
+        if "全部" not in category_filter:
+            items = [item for item in items if item.get('category') in category_filter]
     
     # 关键词搜索
     if keyword:
@@ -262,9 +268,10 @@ with gr.Blocks(title="物品复活平台", css=custom_css) as app:
             with gr.Column():
                 search_keyword = gr.Textbox(label="搜索关键词", placeholder="输入物品名称或描述")
                 search_category = gr.Dropdown(
-                    label="筛选分类",
                     choices=["全部"] + CATEGORIES,
-                    value="全部"
+                    value="全部",
+                    multiselect=True,
+                    label="筛选分类"
                 )
                 search_btn = gr.Button(value="搜索", variant="primary")
             with gr.Column():
@@ -279,7 +286,7 @@ with gr.Blocks(title="物品复活平台", css=custom_css) as app:
 if __name__ == "__main__":
     image_dir_absolute = os.path.abspath(IMAGE_DIR)
     app.launch(
-        share=True,
+        share=False,
         allowed_paths=[image_dir_absolute]  # 使用绝对路径    
     )
     # allowed_paths: List of complete filepaths or parent directories that gradio is allowed to serve. 

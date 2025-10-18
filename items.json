@@ -30,5 +30,14 @@
     "contact": "Zrp1030@sjtu.edu.cn",
     "image": "images\\item_5_20251017_132247.webp",
     "create_time": "2025-10-17 13:22:47"
+  },
+  {
+    "id": 6,
+    "name": "鼠标",
+    "category": "数码",
+    "description": "Silver Wolf Official",
+    "contact": "2364305645",
+    "image": null,
+    "create_time": "2025-10-18 15:08:31"
   }
 ]
