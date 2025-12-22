@@ -1,95 +1,41 @@
-"""
-文件目的: 物品复活平台主程序 - 基于 Gradio 的闲置物品交易 Web 应用
-作者: Zhu Rongpeng
-创建日期: 2025-10-16
-
-功能描述:
-    提供完整的物品管理功能，包括添加、删除、查看、搜索物品
-    支持用户身份认证，记录物品创建者
-    支持图片上传和展示
-    提供多种联系方式识别和格式化
-"""
-
 import gradio as gr
 import json
 import os
+import sqlite3
 import shutil
+import sys
 from datetime import datetime
 from dotenv import load_dotenv
 
 from utils.contact import format_contact
 from utils.auth import show_welcome
+from utils.util import *
+from utils.database import _get_db_connection, _ensure_db_schema, load_users, add_user, save_users, load_items, save_items
 
-# 加载环境变量配置
-load_dotenv()
+# # 加载环境变量配置
+# load_dotenv()
 
 # ==================== 全局常量配置 ====================
 # 从 constants 模块导入数据文件路径配置
 from constants import DATA_FILE      # 物品数据存储文件路径 (items.json)
-from constants import IMAGE_DIR      # 图片存储目录路径 (images/)
 from constants import USERS_FILE     # 用户数据存储文件路径 (users.json)
+from constants import IMAGE_DIR      # 图片存储目录路径 (images/)
 from constants import CATEGORIES     # 物品分类列表
+from constants import DB_FILE        # SQLite 数据库文件路径 (CS3331.db)
+
+# 绝对路径配置（兼容开发和打包环境）
+IMAGE_DIR = get_path_for_write(IMAGE_DIR)
+DB_FILE = get_path_for_write(DB_FILE)
 
 # 创建图片存储目录（如果不存在）
 if not os.path.exists(IMAGE_DIR):
     os.makedirs(IMAGE_DIR)
 
 # 从文件中读取自定义 CSS 样式
-# 注意: style.css 文件需要与 main.py 在同一目录下
-with open("style.css", "r", encoding="utf-8") as f:
+with open(get_path_for_read("style.css"), "r", encoding="utf-8") as f:
     custom_css = f.read()
 
-# ==================== 用户管理功能模块 ====================
-
-def load_users():
-    """
-    从 JSON 文件加载用户数据
-    
-    功能说明:
-        读取 users.json 文件中的用户信息，如果文件不存在则创建默认用户
-    
-    输入参数:
-        无
-    
-    返回值:
-        dict: 用户字典，格式为 {username: password}
-              例如: {"admin": "admin123", "user1": "password1"}
-    
-    异常处理:
-        文件不存在时自动创建默认用户并保存
-    """
-    if os.path.exists(USERS_FILE):
-        with open(USERS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    
-    # 默认用户
-    default_users = {
-        "admin": "admin123",
-        "user1": "password1"
-    }
-    save_users(default_users)
-    return default_users
-
-
-def save_users(users):
-    """
-    保存用户数据到 JSON 文件
-    
-    功能说明:
-        将用户字典序列化为 JSON 格式并写入文件
-    
-    输入参数:
-        users (dict): 用户数据字典，格式为 {username: password}
-    
-    返回值:
-        无
-    
-    副作用:
-        在当前目录创建或覆盖 users.json 文件
-    """
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(users, f, ensure_ascii=False, indent=2)
-
+_ensure_db_schema(DB_FILE)
 
 def authenticate(username, password):
     """
@@ -108,67 +54,10 @@ def authenticate(username, password):
     使用场景:
         app.launch(auth=authenticate)
     """
-    users = load_users()
+    users = load_users(DB_FILE)
     if username in users and users[username] == password:
         return True
     return False
-
-# ==================== 数据存储管理模块 ====================
-
-def load_items():
-    """
-    从 JSON 文件加载物品数据
-    
-    功能说明:
-        读取 items.json 文件中的所有物品信息
-    
-    输入参数:
-        无
-    
-    返回值:
-        list: 物品列表，每个物品是一个字典，包含以下字段:
-              - id (int): 物品唯一标识
-              - name (str): 物品名称
-              - category (str): 物品分类
-              - description (str): 物品描述
-              - contact (str): 联系方式
-              - image (str): 图片路径
-              - create_time (str): 创建时间
-              - creator (str): 创建者用户名
-    
-    异常处理:
-        文件不存在时返回空列表
-    """
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return []
-
-
-def save_items(items):
-    """
-    保存物品数据到 JSON 文件
-    
-    功能说明:
-        将物品列表序列化为 JSON 格式并写入文件
-    
-    输入参数:
-        items (list): 物品数据列表，每个元素为物品字典
-    
-    返回值:
-        无
-    
-    副作用:
-        在当前目录创建或覆盖 items.json 文件
-    
-    格式说明:
-        ensure_ascii=False - 允许中文字符正常显示
-        indent=2 - 使用2个空格缩进，便于阅读
-    """
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
-        # ensure_ascii=False - 允许中文字符
-        # indent=2 - 格式化缩进，便于阅读
 
 def save_image(image, item_id):
     """
@@ -209,7 +98,6 @@ def save_image(image, item_id):
     # 自动处理文件打开/关闭
     # 跨平台兼容（Windows/Linux/Mac）
     return filepath
-
 
 def delete_image(image_path):
     """
@@ -286,29 +174,25 @@ def add_item(name, category, description, contact, image):
             image
         )
     
-    # 加载现有物品数据
-    items = load_items()
-    
-    # 生成新物品ID
-    new_id = max([item['id'] for item in items], default=0) + 1
+    _ensure_db_schema(DB_FILE)
 
-    # 保存图片（如果有）
-    image_path = save_image(image, new_id) if image else None
+    with _get_db_connection(DB_FILE) as conn:
+        # 生成新物品ID（保持与原 JSON 版本一致的“max + 1”策略）
+        new_id = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM items").fetchone()[
+            "next_id"
+        ]
 
-    # 创建新物品记录
-    new_item = {
-        "id": new_id,
-        "name": name,
-        "category": category,
-        "description": description,
-        "contact": contact,
-        "image": image_path,
-        "create_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-    
-    # 添加到列表并保存
-    items.append(new_item)
-    save_items(items)
+        # 保存图片（如果有）
+        image_path = save_image(image, new_id) if image else None
+
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        conn.execute(
+            """
+            INSERT INTO items (id, name, description, contact, create_time, category, image)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (new_id, name, description, contact, now_str, category, image_path),
+        )
     
     # 返回成功消息和清空的输入框
     return (
@@ -320,7 +204,6 @@ def add_item(name, category, description, contact, image):
         "",
         None
     )
-
 
 def delete_item(item_id):
     """
@@ -362,33 +245,26 @@ def delete_item(item_id):
             item_id
         )
     
-    items = load_items()
-    
     try:
         # 转换为整数
         item_id = int(item_id)
-        
-        # 查找要删除的物品
-        item_to_delete = next(
-            (item for item in items if item['id'] == item_id),
-            None
-        )
-        
-        # 检查物品是否存在
-        if not item_to_delete:
-            return (
-                "❌ 物品ID不存在！",
-                get_items_list(),
-                item_id
-            )
-        
-        # 删除关联图片
-        if item_to_delete.get('image'):
-            delete_image(item_to_delete['image'])
 
-        # 从列表中删除物品记录
-        items = [item for item in items if item['id'] != item_id]
-        save_items(items)
+        _ensure_db_schema(DB_FILE)
+        with _get_db_connection(DB_FILE) as conn:
+            row = conn.execute("SELECT image FROM items WHERE id = ?", (item_id,)).fetchone()
+            if not row:
+                return (
+                    "❌ 物品ID不存在！",
+                    get_items_list(),
+                    item_id,
+                )
+
+            # 删除关联图片
+            image_path = row["image"]
+            if image_path:
+                delete_image(image_path)
+
+            conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
         
         return (
             f"✅ 成功删除ID为 {item_id} 的物品",
@@ -437,7 +313,7 @@ def get_items_list():
         使用 Gradio 的文件访问 API: /gradio_api/file={绝对路径}
         需配合 app.launch(allowed_paths=[...]) 使用
     """
-    items = load_items()
+    items = load_items(DB_FILE)
     
     # 处理空列表情况
     if not items:
@@ -517,7 +393,7 @@ def search_items(keyword, category_filter):
         - 关键词为空时只按分类筛选
         - 未找到结果时返回提示信息
     """
-    items = load_items()
+    items = load_items(DB_FILE)
     
     # 默认值处理
     if not category_filter:
@@ -562,7 +438,7 @@ def search_items(keyword, category_filter):
         # 处理图片
         image_tag = ""
         if item.get('image') and os.path.exists(item['image']):
-            image_abs_path = os.path.abspath(item['image'])
+            image_abs_path = os.path.abspath(item['image']).replace('\\', '/')
             image_tag = f'<img src="/gradio_api/file={image_abs_path}" class="item-image" />'
         else:
             image_tag = '<div class="item-image" style="background: #f5f5f5; display: flex; align-items: center; justify-content: center; color: #999;">暂无图片</div>'
@@ -716,6 +592,8 @@ with gr.Blocks(title="物品复活平台", css=custom_css) as app:
 
 # ==================== 应用启动入口 ====================
 
+import traceback
+
 if __name__ == "__main__":
     """
     主程序入口
@@ -740,12 +618,19 @@ if __name__ == "__main__":
     # 获取图片目录的绝对路径
     image_dir_absolute = os.path.abspath(IMAGE_DIR)
     
-    # 启动应用
-    app.launch(
-        share=False,
-        allowed_paths=[image_dir_absolute],  # 使用绝对路径
-        auth=authenticate,  # 使用自定义认证函数
-        auth_message="🔐 请登录物品复活平台\n\n默认账号:\n用户名: admin 密码: admin123\n用户名: user1 密码: password1"    
-    )
-    # allowed_paths: List of complete filepaths or parent directories that gradio is allowed to serve. 
-    # Must be absolute paths. Warning: if you provide directories, any files in these directories or their subdirectories are accessible to all users of your app. Can be set by comma separated environment variable GRADIO_ALLOWED_PATHS. These files are generally assumed to be secure and will be displayed in the browser when possible. 
+    try:
+        # 启动应用
+        app.launch(
+            inbrowser=True,
+            share=False,
+            allowed_paths=[image_dir_absolute],  # 使用绝对路径
+            auth=authenticate,  # 使用自定义认证函数
+            auth_message="🔐 请登录物品复活平台\n\n默认账号:\n用户名: admin 密码: admin123\n用户名: user1 密码: password1"
+        )
+        # allowed_paths: List of complete filepaths or parent directories that gradio is allowed to serve. 
+        # Must be absolute paths. Warning: if you provide directories, any files in these directories or their subdirectories are accessible to all users of your app. Can be set by comma separated environment variable GRADIO_ALLOWED_PATHS. These files are generally assumed to be secure and will be displayed in the browser when possible. 
+    except Exception as e:
+        # 如果出错，打印错误详情
+        traceback.print_exc()
+        # 关键：卡住窗口，不让它立刻关闭
+        input("程序发生严重错误，请截图发给开发者。按回车键退出...")

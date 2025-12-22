@@ -5,5 +5,6 @@ CATEGORIES = [
 ]
 
 DATA_FILE = "items.json"
-IMAGE_DIR = "images"
 USERS_FILE = "users.json" 
+IMAGE_DIR = "images"
+DB_FILE = "CS3331.db"

@@ -2,42 +2,44 @@
   {
     "id": 1,
     "name": "二手自行车",
+    "category": "运动",
     "description": "Specialized",
     "contact": "18952050888",
     "create_time": "2025-10-16 20:11:04"
   },
   {
-    "id": 3,
+    "id": 2,
     "name": "鼠标",
+    "category": "数码",
     "description": "罗技",
     "contact": "18952050888",
     "create_time": "2025-10-16 20:46:58"
   },
   {
-    "id": 4,
+    "id": 3,
     "name": "动漫头像01",
     "category": "其他",
     "description": "银狼",
     "contact": " 2364305645",
-    "image": "images\\item_4_20251016_212755.jpeg",
+    "image": "images\\item_3_20251016_212755.jpeg",
     "create_time": "2025-10-16 21:27:55"
   },
   {
-    "id": 5,
+    "id": 4,
     "name": "动漫头像02",
     "category": "玩具",
     "description": "珂莱塔",
     "contact": "Zrp1030@sjtu.edu.cn",
-    "image": "images\\item_5_20251017_132247.webp",
+    "image": "images\\item_4_20251017_132247.webp",
     "create_time": "2025-10-17 13:22:47"
   },
   {
-    "id": 7,
+    "id": 5,
     "name": "后藤一里的吉他",
     "category": "乐器",
     "description": "Custom白卡黑",
     "contact": "57125858",
-    "image": "images\\item_7_20251018_191922.png",
+    "image": "images\\item_5_20251018_191922.png",
     "create_time": "2025-10-18 19:19:22"
   }
 ]
