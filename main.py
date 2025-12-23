@@ -1,5 +1,6 @@
 import gradio as gr
 import json
+import html
 import os
 import sqlite3
 import shutil
@@ -10,7 +11,7 @@ from dotenv import load_dotenv
 from utils.contact import format_contact
 from utils.auth import show_welcome
 from utils.util import *
-from utils.database import _get_db_connection, _ensure_db_schema, load_users, add_user, save_users, load_items, save_items
+from utils.database import _get_db_connection, _ensure_db_schema, load_users, add_user, load_items, save_items
 
 # # 加载环境变量配置
 # load_dotenv()
@@ -20,8 +21,8 @@ from utils.database import _get_db_connection, _ensure_db_schema, load_users, ad
 from constants import DATA_FILE      # 物品数据存储文件路径 (items.json)
 from constants import USERS_FILE     # 用户数据存储文件路径 (users.json)
 from constants import IMAGE_DIR      # 图片存储目录路径 (images/)
-from constants import CATEGORIES     # 物品分类列表
 from constants import DB_FILE        # SQLite 数据库文件路径 (CS3331.db)
+from constants import CATEGORIES, CATEGORY_FIELDS, MAX_DYNAMIC_FIELDS
 
 # 绝对路径配置（兼容开发和打包环境）
 IMAGE_DIR = get_path_for_write(IMAGE_DIR)
@@ -123,8 +124,75 @@ def delete_image(image_path):
         except Exception:
             pass
 
+
+def _parse_attributes(attributes_text):
+    if not attributes_text:
+        return {}
+    try:
+        value = json.loads(attributes_text)
+        return value if isinstance(value, dict) else {}
+    except Exception:
+        return {}
+
+
+def _render_attributes_html(category, attributes_text):
+    attrs = _parse_attributes(attributes_text)
+    if not attrs:
+        return ""
+
+    defs = CATEGORY_FIELDS.get(category, [])
+    label_by_key = {d.get("key"): d.get("label", d.get("key")) for d in defs}
+
+    parts = []
+    for k, v in attrs.items():
+        if v is None or str(v).strip() == "":
+            continue
+        label = label_by_key.get(k, k)
+        parts.append(
+            f"<span><b>{html.escape(str(label))}</b>: {html.escape(str(v))}</span>"
+        )
+
+    if not parts:
+        return ""
+
+    return "<div>" + " &nbsp; ".join(parts) + "</div>"
+
+
+def _category_field_updates(category):
+    defs = CATEGORY_FIELDS.get(category, [])
+    updates = []
+    for i in range(MAX_DYNAMIC_FIELDS):
+        if i < len(defs):
+            d = defs[i]
+            label = d.get("label", d.get("key", "属性"))
+            required = d.get("required", False)
+            updates.append(
+                gr.update(
+                    visible=True,
+                    label=f"{label}{'*' if required else ''}",
+                    value="",
+                )
+            )
+        else:
+            updates.append(gr.update(visible=False, label="属性", value=""))
+    return updates
+
+
+def _category_field_initial_props(category):
+    defs = CATEGORY_FIELDS.get(category, [])
+    props = []
+    for i in range(MAX_DYNAMIC_FIELDS):
+        if i < len(defs):
+            d = defs[i]
+            label = d.get("label", d.get("key", "属性"))
+            required = d.get("required", False)
+            props.append({"label": f"{label}{'*' if required else ''}", "visible": True})
+        else:
+            props.append({"label": "属性", "visible": False})
+    return props
+
 # 在 click 事件中返回空值来清空输入框。
-def add_item(name, category, description, contact, image):
+def add_item(name, category, description, address, contact, image, *dynamic_values):
     """
     添加新物品到数据库
     
@@ -160,7 +228,14 @@ def add_item(name, category, description, contact, image):
         5. 保存到数据文件
         6. 返回操作结果和更新后的列表
     """
-    print(f"Adding item: {name}, {category}, {description}, {contact}, {image}")
+    print(f"Adding item: {name}, {category}, {description}, {address}, {contact}, {image}")
+
+    # 规范化动态字段输出长度（用于 UI 回填/清空）
+    dynamic_values = list(dynamic_values)
+    if len(dynamic_values) < MAX_DYNAMIC_FIELDS:
+        dynamic_values.extend([""] * (MAX_DYNAMIC_FIELDS - len(dynamic_values)))
+    else:
+        dynamic_values = dynamic_values[:MAX_DYNAMIC_FIELDS]
     
     # 验证必填字段
     if not name or not contact:
@@ -170,8 +245,37 @@ def add_item(name, category, description, contact, image):
             name,
             category,
             description,
+            address,
             contact,
-            image
+            image,
+            *dynamic_values,
+        )
+
+    # 打包动态属性（写死配置驱动）
+    field_defs = CATEGORY_FIELDS.get(category, [])
+    attributes = {}
+    missing_required = []
+    for idx, d in enumerate(field_defs):
+        key = d.get("key")
+        if not key:
+            continue
+        value = (dynamic_values[idx] if idx < len(dynamic_values) else "")
+        value = "" if value is None else str(value).strip()
+        if d.get("required") and not value:
+            missing_required.append(d.get("label", key))
+        attributes[key] = value
+
+    if missing_required:
+        return (
+            "❌ 请填写必填属性：" + "、".join(missing_required),
+            get_items_list(),
+            name,
+            category,
+            description,
+            address,
+            contact,
+            image,
+            *dynamic_values,
         )
     
     _ensure_db_schema(DB_FILE)
@@ -188,10 +292,20 @@ def add_item(name, category, description, contact, image):
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         conn.execute(
             """
-            INSERT INTO items (id, name, description, contact, create_time, category, image)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO items (id, name, description, address, contact, create_time, category, image, attributes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (new_id, name, description, contact, now_str, category, image_path),
+            (
+                new_id,
+                name,
+                description,
+                address,
+                contact,
+                now_str,
+                category,
+                image_path,
+                json.dumps(attributes, ensure_ascii=False),
+            ),
         )
     
     # 返回成功消息和清空的输入框
@@ -202,7 +316,9 @@ def add_item(name, category, description, contact, image):
         None,
         "",
         "",
-        None
+        "",
+        None,
+        *([""] * MAX_DYNAMIC_FIELDS),
     )
 
 def delete_item(item_id):
@@ -347,6 +463,9 @@ def get_items_list():
         # 格式化联系方式（支持邮箱、QQ、电话等）
         contact_html = format_contact(item['contact'])
 
+        # 渲染动态属性（不同类别不同字段）
+        attrs_html = _render_attributes_html(item.get('category', ''), item.get('attributes'))
+
         # 构建单个物品卡片
         display_cards_html += f"""
         <div class="item-card">
@@ -355,6 +474,7 @@ def get_items_list():
             <div class="item-id">ID: {item['id']}</div>
             <div class="item-name">{item['name']}</div>
             <div class="item-desc">{item.get('description', '无描述')}</div>
+            {attrs_html}
             {contact_html}
             <div class="item-time">⏰ {item['create_time']}</div>
         </div>
@@ -446,6 +566,8 @@ def search_items(keyword, category_filter):
         # 格式化联系方式
         contact_html = format_contact(item['contact'])
 
+        attrs_html = _render_attributes_html(item.get('category', ''), item.get('attributes'))
+
         search_cards_html += f"""
         <div class="item-card">
             {image_tag}
@@ -453,6 +575,7 @@ def search_items(keyword, category_filter):
             <div class="item-id">ID: {item['id']}</div>
             <div class="item-name">{item['name']}</div>
             <div class="item-desc">{item.get('description', '无描述')}</div>
+            {attrs_html}
             {contact_html}
             <div class="item-time">⏰ {item['create_time']}</div>
         </div>
@@ -498,7 +621,19 @@ with gr.Blocks(title="物品复活平台", css=custom_css) as app:
                     multiselect=False,
                     label="物品分类*"
                 )
+
+                # 动态属性输入框（先创建占位，按类别显示/隐藏）
+                _initial_props = _category_field_initial_props("书籍")
+                dynamic_fields = [
+                    gr.Textbox(
+                        label=_initial_props[i]["label"],
+                        visible=_initial_props[i]["visible"],
+                    )
+                    for i in range(MAX_DYNAMIC_FIELDS)
+                ]
+
                 add_desc = gr.Textbox(label="物品描述", placeholder="描述物品的状态、价格等", lines=3)
+                add_address = gr.Textbox(label="物品地址", placeholder="例如：某某市某某区某某街道")
                 add_contact = gr.Textbox(label="联系方式*", placeholder="例如：微信号、QQ号、手机号")
                 add_image = gr.Image(label="物品图片（可选）", type="filepath")
                 # C:\Users\Victor\AppData\Local\Temp\gradio\9276db2d12094d403b50fa0616889f4c0344535778c973500e676acfe2344928\1.jpeg
@@ -513,16 +648,25 @@ with gr.Blocks(title="物品复活平台", css=custom_css) as app:
         # 绑定添加按钮事件
         add_btn.click(
             add_item,
-            inputs=[add_name, add_category, add_desc, add_contact, add_image],
+            inputs=[add_name, add_category, add_desc, add_address, add_contact, add_image, *dynamic_fields],
             outputs=[
                 add_output,
                 add_list,
-                add_category,
                 add_name,
+                add_category,
                 add_desc,
+                add_address,
                 add_contact,
-                add_image
+                add_image,
+                *dynamic_fields,
             ]
+        )
+
+        # 类别变化时动态显示对应属性字段
+        add_category.change(
+            fn=_category_field_updates,
+            inputs=[add_category],
+            outputs=dynamic_fields,
         )
     
     # ========== Tab 2: 删除物品 ==========

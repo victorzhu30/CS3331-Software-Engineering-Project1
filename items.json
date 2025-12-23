@@ -5,7 +5,9 @@
     "category": "运动",
     "description": "Specialized",
     "contact": "18952050888",
-    "create_time": "2025-10-16 20:11:04"
+    "create_time": "2025-10-16 20:11:04",
+    "owner_id": 1,
+    "address": "上海市闵行区东川路800号"
   },
   {
     "id": 2,
@@ -13,7 +15,9 @@
     "category": "数码",
     "description": "罗技",
     "contact": "18952050888",
-    "create_time": "2025-10-16 20:46:58"
+    "create_time": "2025-10-16 20:46:58",
+    "owner_id": 1,
+    "address": "上海市浦东新区世纪大道100号"
   },
   {
     "id": 3,
@@ -22,7 +26,9 @@
     "description": "银狼",
     "contact": " 2364305645",
     "image": "images\\item_3_20251016_212755.jpeg",
-    "create_time": "2025-10-16 21:27:55"
+    "create_time": "2025-10-16 21:27:55",
+    "owner_id": 2,
+    "address": "上海市徐汇区漕溪北路800号"
   },
   {
     "id": 4,
@@ -31,7 +37,9 @@
     "description": "珂莱塔",
     "contact": "Zrp1030@sjtu.edu.cn",
     "image": "images\\item_4_20251017_132247.webp",
-    "create_time": "2025-10-17 13:22:47"
+    "create_time": "2025-10-17 13:22:47",
+    "owner_id": 2,
+    "address": "江苏省南京市鼓楼区汉口路22号"
   },
   {
     "id": 5,
@@ -40,6 +48,8 @@
     "description": "Custom白卡黑",
     "contact": "57125858",
     "image": "images\\item_5_20251018_191922.png",
-    "create_time": "2025-10-18 19:19:22"
+    "create_time": "2025-10-18 19:19:22",
+    "owner_id": 2,
+    "address": "浙江省杭州市西湖区文三路138号"
   }
 ]

@@ -1,4 +1,23 @@
-{
-  "admin": "admin123",
-  "user1": "password1"
-}
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "password": "admin123",
+    "role": "admin",
+    "status": "approved"
+  },
+  {
+    "id": 2,
+    "username": "user1",
+    "password": "password1",
+    "role": "user",
+    "status": "approved"
+  },
+  {
+    "id": 3,
+    "username": "user2",
+    "password": "password2",
+    "role": "user",
+    "status": "pending"
+  }
+]

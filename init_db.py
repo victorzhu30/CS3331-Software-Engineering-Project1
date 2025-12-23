@@ -20,8 +20,11 @@ cursor = conn.cursor()
 # 创建 users 表
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
-        username TEXT PRIMARY KEY,
-        password TEXT NOT NULL
+        id INTEGER PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT DEFAULT 'user',
+        status TEXT DEFAULT 'pending'
     )
 ''')
 
@@ -31,11 +34,15 @@ cursor.execute('''
     CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
+        category TEXT NOT NULL,
         description TEXT,
         contact TEXT,
+        image TEXT,
         create_time TEXT,
-        category TEXT NOT NULL,
-        image TEXT
+        owner_id INTEGER NOT NULL,
+        address TEXT,
+        attributes TEXT,
+        FOREIGN KEY (owner_id) REFERENCES users(id)
     )
 ''')
 
@@ -45,16 +52,23 @@ cursor.execute('''
 try:
     with open('users.json', 'r', encoding='utf-8') as f:
         users_data = json.load(f)
-        
-        # users.json 是字典格式 {"admin": "123", ...}
-        #我们需要把它转成列表形式插入 [(admin, 123), (user1, pwd1)]
-        user_list = []
-        for username, password in users_data.items():
-            user_list.append((username, password))
+        # print(users_data)
+        # [{'id': 1, 'username': 'admin', 'password': 'admin123', 'role': 'admin', 'status': 'approved'}, {'id': 2, 'username': 'user1', 'password': 'password1', 'role': 'user', 'status': 'approved'}, {'id': 3, 'username': 'user2', 'password': 'password2', 'role': 'user', 'status': 'pending'}]
+
+        user_rows = []
+        for user in users_data:
+            row = (
+                user.get('id'),
+                user.get('username'),
+                user.get('password'),
+                user.get('role', 'user'),    # 默认值 'user'
+                user.get('status', 'pending') # 默认值 'pending'
+            )
+            user_rows.append(row)
             
         # 批量插入
-        cursor.executemany('INSERT INTO users (username, password) VALUES (?, ?)', user_list)
-        print(f"成功插入 {len(user_list)} 条用户数据。")
+        cursor.executemany('INSERT INTO users (id, username, password, role, status) VALUES (?, ?, ?, ?, ?)', user_rows)
+        print(f"成功插入 {len(user_rows)} 条用户数据。")
 
 except FileNotFoundError:
     print("未找到 users.json，跳过用户数据导入。")
@@ -76,15 +90,18 @@ try:
                 item.get('category'), 
                 item.get('description'),
                 item.get('contact'),
+                item.get('image', None),     # 默认值为 None
                 item.get('create_time'),
-                item.get('image', None)     # 默认值为 None
+                item.get('owner_id'),
+                item.get('address'),
+                item.get('attributes', None),
             )
             item_rows.append(row)
             
         # 批量插入
         cursor.executemany('''
-            INSERT INTO items (id, name, category, description, contact, create_time, image) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO items (id, name, category, description, contact, image, create_time, owner_id, address, attributes) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', item_rows)
         print(f"成功插入 {len(item_rows)} 条物品数据。")
 

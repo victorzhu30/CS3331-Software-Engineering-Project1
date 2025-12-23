@@ -1,5 +1,14 @@
 import sqlite3
 
+def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(r[1] == column for r in rows)
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, column_def_sql: str) -> None:
+    if _column_exists(conn, table, column):
+        return
+    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_def_sql}")
+
 def _get_db_connection(DB_FILE) -> sqlite3.Connection:
     """创建 SQLite 连接，并启用 Row 工厂便于按列名取值。"""
     conn = sqlite3.connect(DB_FILE)
@@ -12,8 +21,11 @@ def _ensure_db_schema(DB_FILE) -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
-                username TEXT PRIMARY KEY,
-                password TEXT NOT NULL
+                id INTEGER PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
+                status TEXT DEFAULT 'pending'
             )
             """
         )
@@ -22,46 +34,31 @@ def _ensure_db_schema(DB_FILE) -> None:
             CREATE TABLE IF NOT EXISTS items (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
+                category TEXT NOT NULL,
                 description TEXT,
                 contact TEXT,
+                image TEXT,
                 create_time TEXT,
-                category TEXT NOT NULL,
-                image TEXT
+                owner_id INTEGER,
+                address TEXT,
+                attributes TEXT,
+                FOREIGN KEY (owner_id) REFERENCES users(id)
             )
             """
         )
 
+        # 兼容旧数据库：items 表已存在但缺少新列
+        _ensure_column(conn, "items", "owner_id", "owner_id INTEGER")
+        _ensure_column(conn, "items", "address", "address TEXT")
+        _ensure_column(conn, "items", "attributes", "attributes TEXT")
+
 # ==================== 用户管理功能模块 ====================
 
 def load_users(DB_FILE):
-    """
-    从 JSON 文件加载用户数据
-    
-    功能说明:
-        读取 users.json 文件中的用户信息，如果文件不存在则创建默认用户
-    
-    输入参数:
-        无
-    
-    返回值:
-        dict: 用户字典，格式为 {username: password}
-              例如: {"admin": "admin123", "user1": "password1"}
-    
-    异常处理:
-        文件不存在时自动创建默认用户并保存
-    """
     with _get_db_connection(DB_FILE) as conn:
         rows = conn.execute("SELECT username, password FROM users").fetchall()
         if rows:
             return {row["username"]: row["password"] for row in rows}
-
-    # 数据库为空时插入默认用户（保持原行为）
-    default_users = {
-        "admin": "admin123",
-        "user1": "password1",
-    }
-    save_users(default_users)
-    return default_users
 
 def add_user(username: str, password: str, DB_FILE) -> bool:
     """新增用户。
@@ -84,16 +81,6 @@ def add_user(username: str, password: str, DB_FILE) -> bool:
     except sqlite3.IntegrityError:
         return False
 
-def save_users(users, DB_FILE):
-    _ensure_db_schema(DB_FILE)
-    user_list = [(username, password) for username, password in users.items()]
-    with _get_db_connection(DB_FILE) as conn:
-        conn.execute("DELETE FROM users")
-        conn.executemany(
-            "INSERT INTO users (username, password) VALUES (?, ?)",
-            user_list,
-        )
-
 # ==================== 数据存储管理模块 ====================
 
 def load_items(DB_FILE):
@@ -115,7 +102,7 @@ def load_items(DB_FILE):
     with _get_db_connection(DB_FILE) as conn:
         rows = conn.execute(
             """
-            SELECT id, name, category, description, contact, image, create_time
+            SELECT id, name, category, description, contact, image, create_time, attributes
             FROM items
             ORDER BY id ASC
             """
@@ -130,6 +117,7 @@ def load_items(DB_FILE):
             "contact": row["contact"],
             "image": row["image"],
             "create_time": row["create_time"],
+            "attributes": row["attributes"],
         }
         for row in rows
     ]
@@ -148,6 +136,7 @@ def save_items(items, DB_FILE):
             item.get("create_time"),
             item.get("category"),
             item.get("image"),
+            item.get("attributes"),
         )
         for item in items
     ]
@@ -156,8 +145,8 @@ def save_items(items, DB_FILE):
         conn.execute("DELETE FROM items")
         conn.executemany(
             """
-            INSERT INTO items (id, name, description, contact, create_time, category, image)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO items (id, name, description, contact, create_time, category, image, attributes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )
