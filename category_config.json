@@ -1,0 +1,138 @@
+{
+  "categories": [
+    "书籍",
+    "数码",
+    "居家",
+    "食品",
+    "美妆",
+    "票券",
+    "衣饰",
+    "运动",
+    "文具",
+    "玩具",
+    "乐器",
+    "其他"
+  ],
+  "category_fields": {
+    "书籍": [
+      {
+        "key": "author",
+        "label": "作者",
+        "required": true
+      },
+      {
+        "key": "publisher",
+        "label": "出版社",
+        "required": false
+      }
+    ],
+    "数码": [
+      {
+        "key": "brand",
+        "label": "品牌",
+        "required": true
+      },
+      {
+        "key": "model",
+        "label": "型号",
+        "required": false
+      }
+    ],
+    "居家": [
+      {
+        "key": "material",
+        "label": "材质",
+        "required": false
+      },
+      {
+        "key": "quantity",
+        "label": "数量",
+        "required": false
+      }
+    ],
+    "食品": [
+      {
+        "key": "expiry_date",
+        "label": "保质期",
+        "required": true
+      },
+      {
+        "key": "quantity",
+        "label": "数量",
+        "required": true
+      }
+    ],
+    "美妆": [
+      {
+        "key": "brand",
+        "label": "品牌",
+        "required": false
+      },
+      {
+        "key": "expiry_date",
+        "label": "保质期",
+        "required": false
+      }
+    ],
+    "票券": [
+      {
+        "key": "valid_until",
+        "label": "有效期",
+        "required": false
+      }
+    ],
+    "衣饰": [
+      {
+        "key": "size",
+        "label": "尺码",
+        "required": false
+      }
+    ],
+    "鞋包": [
+      {
+        "key": "size",
+        "label": "尺码",
+        "required": false
+      },
+      {
+        "key": "brand",
+        "label": "品牌",
+        "required": false
+      }
+    ],
+    "运动": [
+      {
+        "key": "brand",
+        "label": "品牌",
+        "required": false
+      }
+    ],
+    "文具": [
+      {
+        "key": "brand",
+        "label": "品牌",
+        "required": false
+      }
+    ],
+    "玩具": [
+      {
+        "key": "age_range",
+        "label": "适用年龄",
+        "required": false
+      }
+    ],
+    "乐器": [
+      {
+        "key": "brand",
+        "label": "品牌",
+        "required": false
+      },
+      {
+        "key": "model",
+        "label": "型号",
+        "required": false
+      }
+    ],
+    "其他": []
+  }
+}

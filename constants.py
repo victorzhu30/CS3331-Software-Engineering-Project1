@@ -60,8 +60,9 @@ CATEGORY_FIELDS = {
     "其他": [],
 }
 
-# 动态属性输入框最多显示几个（取所有类别字段数的最大值）
-MAX_DYNAMIC_FIELDS = max((len(v) for v in CATEGORY_FIELDS.values()), default=0)
+# 动态属性输入框最多显示几个（管理员可配置类别字段；为避免 UI 字段不够用，这里设定一个固定上限）
+# 注意：如果你希望允许更多字段，只需要调大这个值即可。
+MAX_DYNAMIC_FIELDS = 10
 
 DATA_FILE = "items.json"
 USERS_FILE = "users.json" 

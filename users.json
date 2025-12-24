@@ -4,20 +4,26 @@
     "username": "admin",
     "password": "admin123",
     "role": "admin",
-    "status": "approved"
+    "status": "approved",
+    "contact": "18952050888",
+    "address": "法国巴黎"
   },
   {
     "id": 2,
     "username": "user1",
     "password": "password1",
     "role": "user",
-    "status": "approved"
+    "status": "approved",
+    "contact": "18913021299",
+    "address": "德国慕尼黑"
   },
   {
     "id": 3,
     "username": "user2",
     "password": "password2",
     "role": "user",
-    "status": "pending"
+    "status": "pending",
+    "contact": "18913353777",
+    "address": "英国伦敦"
   }
 ]

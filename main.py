@@ -1,17 +1,31 @@
-import gradio as gr
 import json
 import html
 import os
-import sqlite3
 import shutil
-import sys
 from datetime import datetime
 from dotenv import load_dotenv
+import traceback
+
+import gradio as gr
+from fastapi import FastAPI
+import uvicorn
 
 from utils.contact import format_contact
 from utils.auth import show_welcome
 from utils.util import *
-from utils.database import _get_db_connection, _ensure_db_schema, load_users, add_user, load_items, save_items
+from utils.database import (
+    _get_db_connection,
+    _ensure_db_schema,
+    load_users,
+    add_user,
+    load_items,
+    save_items,
+    authenticate_user,
+    register_user,
+    list_pending_users,
+    approve_user,
+    get_user_by_username,
+)
 
 # # 加载环境变量配置
 # load_dotenv()
@@ -22,7 +36,9 @@ from constants import DATA_FILE      # 物品数据存储文件路径 (items.jso
 from constants import USERS_FILE     # 用户数据存储文件路径 (users.json)
 from constants import IMAGE_DIR      # 图片存储目录路径 (images/)
 from constants import DB_FILE        # SQLite 数据库文件路径 (CS3331.db)
-from constants import CATEGORIES, CATEGORY_FIELDS, MAX_DYNAMIC_FIELDS
+from constants import MAX_DYNAMIC_FIELDS
+
+from utils import category_config
 
 # 绝对路径配置（兼容开发和打包环境）
 IMAGE_DIR = get_path_for_write(IMAGE_DIR)
@@ -38,27 +54,145 @@ with open(get_path_for_read("style.css"), "r", encoding="utf-8") as f:
 
 _ensure_db_schema(DB_FILE)
 
+# https://www.gradio.app/guides/sharing-your-app#mounting-within-another-fast-api-app
+MAIN_PATH = "/home"      # 主应用（需要登录）
+REGISTER_PATH = "/register"  # 注册页（无需登录）
+
+app = FastAPI()
+
+from fastapi.responses import HTMLResponse
+
+# @app.get("/")
+# def read_main():
+#     return {
+#         "message": "This is your main app. Open /home for the main UI and /register for registration.",
+#         "main_ui": MAIN_PATH,
+#         "register": REGISTER_PATH,
+#     }
+
+@app.get("/", response_class=HTMLResponse)
+def read_main():
+    return f"""
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <title>系统入口</title>
+            <style>
+                body {{ font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f5f7f9; }}
+                .container {{ text-align: center; background: white; padding: 2rem; border-radius: 12px; shadow: 0 4px 6px rgba(0,0,0,0.1); box-shadow: 0 10px 25px rgba(0,0,0,0.05); }}
+                h1 {{ color: #2d3748; margin-bottom: 1.5rem; }}
+                .btn-group {{ display: flex; gap: 1rem; justify-content: center; }}
+                .btn {{ padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; transition: all 0.2s; }}
+                .btn-main {{ background-color: #4299e1; color: white; }}
+                .btn-main:hover {{ background-color: #3182ce; }}
+                .btn-reg {{ background-color: #edf2f7; color: #4a5568; }}
+                .btn-reg:hover {{ background-color: #e2e8f0; }}
+                p {{ color: #718096; margin-bottom: 2rem; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>欢迎使用系统</h1>
+                <p>请根据您的需求选择进入的页面</p>
+                <div class="btn-group">
+                    <a href="{MAIN_PATH}" class="btn btn-main">进入主应用 (需要登录)</a>
+                    <a href="{REGISTER_PATH}" class="btn btn-reg">新用户注册</a>
+                </div>
+            </div>
+        </body>
+    </html>
+    """
+
 def authenticate(username, password):
     """
     验证用户登录凭证
-    
-    功能说明:
-        检查用户名和密码是否匹配，用于 Gradio 的 auth 参数
-    
+
     输入参数:
         username (str): 用户输入的用户名
         password (str): 用户输入的密码
     
     返回值:
         bool: 验证成功返回 True，失败返回 False
-    
-    使用场景:
-        app.launch(auth=authenticate)
     """
-    users = load_users(DB_FILE)
-    if username in users and users[username] == password:
-        return True
-    return False
+    # 仅允许已通过管理员审批 (status=approved) 的用户登录
+    if not username or not password:
+        return False
+    return authenticate_user(username, password, DB_FILE, require_approved=True)
+
+def _is_admin_request(request: gr.Request | None) -> bool:
+    """
+    Note: if your function is called directly instead of through the UI (this happens, for example, when examples are cached, or when the Gradio app is called via API), then request will be None. 
+    You should handle this case explicitly to ensure that your app does not throw any errors. That is why we have the explicit check if request.
+    """
+    if not request:
+        return False
+    username = getattr(request, "username", None)
+    if not username:
+        return False
+    me = get_user_by_username(username, DB_FILE)
+    return bool(me and me.get("role") == "admin")
+
+def _render_pending_users_html():
+    pending = list_pending_users(DB_FILE)
+    if not pending:
+        return "<div style='padding: 12px; color: #666;'>暂无待审批用户</div>"
+
+    rows_html = "".join(
+        f"""
+        <tr>
+            <td>{html.escape(str(u.get('id', '')))}</td>
+            <td>{html.escape(str(u.get('username', '')))}</td>
+            <td>{html.escape(str(u.get('contact', '') or ''))}</td>
+            <td>{html.escape(str(u.get('address', '') or ''))}</td>
+            <td>{html.escape(str(u.get('status', '') or ''))}</td>
+        </tr>
+        """
+        for u in pending
+    )
+
+    return (
+        "<div style='padding: 8px 0;'><b>待审批用户列表</b></div>"
+        "<table style='width: 100%; border-collapse: collapse;'>"
+        "<thead><tr>"
+        "<th style='text-align:left;border-bottom:1px solid #ddd;padding:6px;'>ID</th>"
+        "<th style='text-align:left;border-bottom:1px solid #ddd;padding:6px;'>用户名</th>"
+        "<th style='text-align:left;border-bottom:1px solid #ddd;padding:6px;'>联系方式</th>"
+        "<th style='text-align:left;border-bottom:1px solid #ddd;padding:6px;'>住址</th>"
+        "<th style='text-align:left;border-bottom:1px solid #ddd;padding:6px;'>状态</th>"
+        "</tr></thead>"
+        f"<tbody>{rows_html}</tbody>"
+        "</table>"
+    )
+
+def admin_approve_user(target_username, request: gr.Request):
+    # 仅管理员可审批（并处理 request 可能为 None）
+    if not _is_admin_request(request):
+        return "❌ 仅管理员可审批用户", _render_pending_users_html(), target_username
+
+    ok, msg = approve_user(target_username, DB_FILE)
+    prefix = "✅ " if ok else "❌ "
+    return prefix + msg, _render_pending_users_html(), ""
+
+def do_register(username, password, confirm_password, contact, address):
+    if password != confirm_password:
+        return "❌ 两次输入的密码不一致", username, password, confirm_password, contact, address
+
+    ok, msg = register_user(username, password, contact, address, DB_FILE)
+    if ok:
+        return (
+            f"✅ {msg}\n\n请等待管理员审批后再登录。",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+    return "❌ " + msg, username, password, confirm_password, contact, address
+
+def _init_admin_tab(request: gr.Request | None):
+    visible = _is_admin_request(request)
+    # Tab 默认隐藏；仅管理员在加载后显示
+    return gr.update(visible=visible), _render_pending_users_html()
 
 def save_image(image, item_id):
     """
@@ -140,7 +274,7 @@ def _render_attributes_html(category, attributes_text):
     if not attrs:
         return ""
 
-    defs = CATEGORY_FIELDS.get(category, [])
+    defs = category_config.get_category_fields().get(category, [])
     label_by_key = {d.get("key"): d.get("label", d.get("key")) for d in defs}
 
     parts = []
@@ -159,7 +293,7 @@ def _render_attributes_html(category, attributes_text):
 
 
 def _category_field_updates(category):
-    defs = CATEGORY_FIELDS.get(category, [])
+    defs = category_config.get_category_fields().get(category, [])
     updates = []
     for i in range(MAX_DYNAMIC_FIELDS):
         if i < len(defs):
@@ -179,7 +313,7 @@ def _category_field_updates(category):
 
 
 def _category_field_initial_props(category):
-    defs = CATEGORY_FIELDS.get(category, [])
+    defs = category_config.get_category_fields().get(category, [])
     props = []
     for i in range(MAX_DYNAMIC_FIELDS):
         if i < len(defs):
@@ -193,41 +327,6 @@ def _category_field_initial_props(category):
 
 # 在 click 事件中返回空值来清空输入框。
 def add_item(name, category, description, address, contact, image, *dynamic_values):
-    """
-    添加新物品到数据库
-    
-    功能说明:
-        创建新物品记录，包括保存图片、生成ID、记录时间等
-    
-    输入参数:
-        name (str): 物品名称，必填
-        category (str): 物品分类，从预定义分类中选择
-        description (str): 物品描述，可选
-        contact (str): 联系方式，必填（邮箱/QQ/手机号）
-        image (str): 上传的图片临时路径，可选
-    
-    返回值:
-        tuple: 包含7个元素的元组，用于更新 Gradio 组件
-            (0) str: 操作结果消息
-            (1) str: 更新后的物品列表HTML
-            (2) str: 清空后的分类输入框
-            (3) str: 清空后的名称输入框
-            (4) str: 清空后的描述输入框
-            (5) str: 清空后的联系方式输入框
-            (6) None: 清空后的图片上传框
-    
-    数据验证:
-        - 物品名称不能为空
-        - 联系方式不能为空
-    
-    业务逻辑:
-        1. 验证必填字段
-        2. 生成新的物品ID（最大ID + 1）
-        3. 保存上传的图片
-        4. 创建物品记录
-        5. 保存到数据文件
-        6. 返回操作结果和更新后的列表
-    """
     print(f"Adding item: {name}, {category}, {description}, {address}, {contact}, {image}")
 
     # 规范化动态字段输出长度（用于 UI 回填/清空）
@@ -252,7 +351,7 @@ def add_item(name, category, description, address, contact, image, *dynamic_valu
         )
 
     # 打包动态属性（写死配置驱动）
-    field_defs = CATEGORY_FIELDS.get(category, [])
+    field_defs = category_config.get_category_fields().get(category, [])
     attributes = {}
     missing_required = []
     for idx, d in enumerate(field_defs):
@@ -455,7 +554,7 @@ def get_items_list():
             # https://blog.gitcode.com/5eaed1170a48c79c5c3391f182927f5a.html
             # https://gradio.org.cn/guides/file-access
             image_abs_path = os.path.abspath(item['image']).replace('\\', '/')
-            image_tag = f'<img src="/gradio_api/file={image_abs_path}" class="item-image" />'
+            image_tag = f'<img src="gradio_api/file={image_abs_path}" class="item-image" />'
         else:
             # 无图片时显示占位符
             image_tag = '<div class="item-image" style="background: #f5f5f5; display: flex; align-items: center; justify-content: center; color: #999;">暂无图片</div>'
@@ -559,7 +658,7 @@ def search_items(keyword, category_filter):
         image_tag = ""
         if item.get('image') and os.path.exists(item['image']):
             image_abs_path = os.path.abspath(item['image']).replace('\\', '/')
-            image_tag = f'<img src="/gradio_api/file={image_abs_path}" class="item-image" />'
+            image_tag = f'<img src="gradio_api/file={image_abs_path}" class="item-image" />'
         else:
             image_tag = '<div class="item-image" style="background: #f5f5f5; display: flex; align-items: center; justify-content: center; color: #999;">暂无图片</div>'
         
@@ -584,10 +683,170 @@ def search_items(keyword, category_filter):
     search_cards_html += "</div>"
     return search_cards_html, ""
 
+
+# ==================== 管理员：物品类型管理 ====================
+
+def _render_category_config_html() -> str:
+    categories = category_config.get_categories()
+    fields_map = category_config.get_category_fields()
+
+    if not categories:
+        return "<div style='padding: 12px; color: #666;'>暂无物品类型</div>"
+
+    rows_html = "".join(
+        f"""
+        <tr>
+            <td style='border-bottom:1px solid #eee;padding:6px;'>{html.escape(str(c))}</td>
+            <td style='border-bottom:1px solid #eee;padding:6px;'>{len(fields_map.get(c, []))}</td>
+        </tr>
+        """
+        for c in categories
+    )
+
+    return (
+        "<div style='padding: 8px 0;'><b>当前物品类型</b></div>"
+        "<table style='width: 100%; border-collapse: collapse;'>"
+        "<thead><tr>"
+        "<th style='text-align:left;border-bottom:1px solid #ddd;padding:6px;'>类型名称</th>"
+        "<th style='text-align:left;border-bottom:1px solid #ddd;padding:6px;'>属性数量</th>"
+        "</tr></thead>"
+        f"<tbody>{rows_html}</tbody>"
+        "</table>"
+        f"<div style='padding-top:6px;color:#666;'>字段上限：{MAX_DYNAMIC_FIELDS}（可在 constants.py 调整）</div>"
+    )
+
+
+def _dropdown_updates_after_category_change():
+    cats = category_config.get_categories()
+    return (
+        gr.update(choices=cats),
+        gr.update(choices=["全部"] + cats),
+    )
+
+def _init_category_tab(request: gr.Request | None):
+    visible = _is_admin_request(request)
+    cats = category_config.get_categories()
+    return gr.update(visible=visible), _render_category_config_html(), gr.update(choices=cats, value=None)
+
+def admin_category_load(selected_category: str, request: gr.Request | None):
+    if not _is_admin_request(request):
+        return "❌ 仅管理员可操作", gr.update(), "", "[]"
+
+    cats = category_config.get_categories()
+    selected_category = (selected_category or "").strip()
+    if not selected_category or selected_category not in cats:
+        return "", gr.update(choices=cats, value=None), "", "[]"
+
+    return (
+        "",
+        gr.update(choices=cats, value=selected_category),
+        selected_category,
+        category_config.get_fields_json_for_category(selected_category),
+    )
+
+def admin_category_save(selected_category: str, new_name: str, fields_json: str, request: gr.Request | None):
+    if not _is_admin_request(request):
+        add_upd, search_upd = _dropdown_updates_after_category_change()
+        return (
+            "❌ 仅管理员可操作",
+            _render_category_config_html(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            add_upd,
+            search_upd,
+        )
+
+    ok, msg = category_config.upsert_category(
+        old_name = selected_category,
+        new_name = new_name,
+        fields_json = fields_json,
+    )
+    prefix = "✅ " if ok else "❌ "
+
+    cats = category_config.get_categories()
+    final_name = (new_name or "").strip()
+    cat_select_upd = gr.update(choices=cats, value=(final_name if ok else (selected_category or None)))
+    add_upd, search_upd = _dropdown_updates_after_category_change()
+    # 保存成功后刷新 JSON（按规范化后的格式回填）
+    fields_back = category_config.get_fields_json_for_category(final_name) if ok else (fields_json or "[]")
+
+    return (
+        prefix + msg,
+        _render_category_config_html(),
+        cat_select_upd,
+        (final_name if ok else (new_name or "")),
+        fields_back,
+        add_upd,
+        search_upd,
+    )
+
+
+def admin_category_delete(selected_category: str, request: gr.Request | None):
+    if not _is_admin_request(request):
+        add_upd, search_upd = _dropdown_updates_after_category_change()
+        return (
+            "❌ 仅管理员可操作",
+            _render_category_config_html(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            add_upd,
+            search_upd,
+        )
+
+    selected_category = (selected_category or "").strip()
+    if not selected_category:
+        add_upd, search_upd = _dropdown_updates_after_category_change()
+        return (
+            "❌ 请选择要删除的类型",
+            _render_category_config_html(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            add_upd,
+            search_upd,
+        )
+
+    _ensure_db_schema(DB_FILE)
+    with _get_db_connection(DB_FILE) as conn:
+        cnt = conn.execute(
+            "SELECT COUNT(1) AS c FROM items WHERE category = ?",
+            (selected_category,),
+        ).fetchone()["c"]
+
+    if cnt and int(cnt) > 0:
+        add_upd, search_upd = _dropdown_updates_after_category_change()
+        return (
+            f"❌ 该类型下已有 {cnt} 条物品记录，不能删除",
+            _render_category_config_html(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            add_upd,
+            search_upd,
+        )
+
+    ok, msg = category_config.delete_category(selected_category)
+    prefix = "✅ " if ok else "❌ "
+    cats = category_config.get_categories()
+    cat_select_upd = gr.update(choices=cats, value=None)
+    add_upd, search_upd = _dropdown_updates_after_category_change()
+
+    return (
+        prefix + msg,
+        _render_category_config_html(),
+        cat_select_upd,
+        "",
+        "[]",
+        add_upd,
+        search_upd,
+    )
+
 # ==================== Gradio 界面构建 ====================
 
 # 创建 Gradio 应用界面
-with gr.Blocks(title="物品复活平台", css=custom_css) as app:
+with gr.Blocks(title="物品复活平台 - 首页", css=custom_css) as main_ui:
     # 页面标题
     gr.Markdown(value="# 🔄 物品复活平台")
     gr.Markdown(value="## 让闲置物品找到新主人！")
@@ -599,12 +858,13 @@ with gr.Blocks(title="物品复活平台", css=custom_css) as app:
         with gr.Column(scale=1):
             logout_button = gr.Button(
                 "🚪 退出登录",
-                link="/logout",
+                # 相对链接，挂载到 /gradio 时会变成 /gradio/logout
+                link="logout",
                 variant="secondary"
             )
     
     # 页面加载时显示欢迎信息
-    app.load(show_welcome, None, welcome_msg)
+    main_ui.load(show_welcome, None, welcome_msg)
 
     # ========== Tab 1: 添加物品 ==========
     with gr.Tab(label="📝 添加物品"):
@@ -615,15 +875,17 @@ with gr.Blocks(title="物品复活平台", css=custom_css) as app:
                     label="物品名称*",
                     placeholder="例如：二手自行车"
                 )
+                _cats = category_config.get_categories()
+                _default_cat = "书籍" if "书籍" in _cats else (_cats[0] if _cats else None)
                 add_category = gr.Dropdown(
-                    choices=CATEGORIES,
-                    value="书籍",
+                    choices=_cats,
+                    value=_default_cat,
                     multiselect=False,
                     label="物品分类*"
                 )
 
                 # 动态属性输入框（先创建占位，按类别显示/隐藏）
-                _initial_props = _category_field_initial_props("书籍")
+                _initial_props = _category_field_initial_props(_default_cat)
                 dynamic_fields = [
                     gr.Textbox(
                         label=_initial_props[i]["label"],
@@ -716,7 +978,7 @@ with gr.Blocks(title="物品复活平台", css=custom_css) as app:
                     placeholder="输入物品名称或描述"
                 )
                 search_category = gr.Dropdown(
-                    choices=["全部"] + CATEGORIES,
+                    choices=["全部"] + category_config.get_categories(),
                     value="全部",
                     multiselect=True,
                     label="筛选分类"
@@ -734,9 +996,106 @@ with gr.Blocks(title="物品复活平台", css=custom_css) as app:
             outputs=[search_output, search_keyword]
         )
 
-# ==================== 应用启动入口 ====================
+    # ========== Tab 5: 用户审批（管理员） ==========
+    with gr.Tab(label="✅ 用户审批 (管理员)", visible=False) as admin_tab:
+        gr.Markdown("仅管理员可见：批准 pending 用户后才能登录主应用。")
+        with gr.Row():
+            with gr.Column(scale=1):
+                approve_username = gr.Textbox(label="待批准用户名", placeholder="例如：new_user")
+                approve_btn = gr.Button(value="批准用户", variant="primary")
+                approve_msg = gr.Textbox(label="操作结果", lines=2)
+            with gr.Column(scale=2):
+                pending_list_html = gr.HTML(value=_render_pending_users_html())
 
-import traceback
+        approve_btn.click(
+            admin_approve_user,
+            inputs=[approve_username],
+            outputs=[approve_msg, pending_list_html, approve_username],
+        )
+
+    # ========== Tab 6: 物品类型管理（管理员） ==========
+    with gr.Tab(label="🛠️ 物品类型管理 (管理员)", visible=False) as category_admin_tab:
+        gr.Markdown("仅管理员可见：新增/修改物品类型（名称 + 属性定义）。默认读取 constants.py；保存后写入 category_config.json。")
+
+        category_config_html = gr.HTML(value=_render_category_config_html())
+
+        with gr.Row():
+            with gr.Column(scale=1):
+                cat_select = gr.Dropdown(
+                    choices=category_config.get_categories(),
+                    value=None,
+                    label="选择要编辑的类型",
+                )
+                cat_name = gr.Textbox(label="修改类型名称", placeholder="例如：家具")
+            with gr.Column(scale=2):
+                cat_fields = gr.Textbox(
+                    label="属性定义（JSON 数组）",
+                    lines=10,
+                    # value="[]",
+                    placeholder='例如：[{"key":"brand","label":"品牌","required":false}]',
+                )
+
+        with gr.Row():
+            cat_load_btn = gr.Button(value="加载选中类型", variant="secondary")
+            cat_save_btn = gr.Button(value="保存（新增/更新）", variant="primary")
+            cat_del_btn = gr.Button(value="删除类型", variant="stop")
+
+        cat_msg = gr.Textbox(label="操作结果", lines=2)
+
+        cat_load_btn.click(
+            admin_category_load,
+            inputs=[cat_select],
+            outputs=[cat_msg, cat_select, cat_name, cat_fields],
+        )
+
+        cat_save_btn.click(
+            admin_category_save,
+            inputs=[cat_select, cat_name, cat_fields],
+            outputs=[cat_msg, category_config_html, cat_select, cat_name, cat_fields, add_category, search_category],
+        )
+
+        cat_del_btn.click(
+            admin_category_delete,
+            inputs=[cat_select],
+            outputs=[cat_msg, category_config_html, cat_select, cat_name, cat_fields, add_category, search_category],
+        )
+
+    # 页面加载后根据当前登录用户角色，决定是否显示管理员 Tab
+    main_ui.load(
+        _init_admin_tab,
+        inputs=None,
+        outputs=[admin_tab, pending_list_html],
+    )
+
+    # 页面加载后根据当前登录用户角色，决定是否显示物品类型管理 Tab
+    main_ui.load(
+        _init_category_tab,
+        inputs=None,
+        outputs=[category_admin_tab, category_config_html, cat_select],
+    )
+
+# 注册页面（无需登录），与主应用同进程同端口，通过 FastAPI 挂载在 /register
+with gr.Blocks(title="物品复活平台 - 用户注册", css=custom_css) as register_page:
+    gr.Markdown(value="# 📝 新用户注册")
+    gr.Markdown(value="注册后默认进入待审批 (pending) 状态，管理员批准后才能登录主应用。")
+    with gr.Row():
+        with gr.Column():
+            reg_username = gr.Textbox(label="用户名*", placeholder="至少 3 个字符")
+            reg_password = gr.Textbox(label="密码*", type="password", placeholder="至少 6 个字符")
+            reg_confirm = gr.Textbox(label="确认密码*", type="password", placeholder="再次输入密码")
+            reg_contact = gr.Textbox(label="联系方式*", placeholder="手机号/QQ/微信等")
+            reg_address = gr.Textbox(label="住址*", placeholder="例如：某某市某某区")
+            reg_btn = gr.Button(value="注册", variant="primary")
+        with gr.Column():
+            reg_out = gr.Textbox(label="结果", lines=6)
+
+    reg_btn.click(
+        do_register,
+        inputs=[reg_username, reg_password, reg_confirm, reg_contact, reg_address],
+        outputs=[reg_out, reg_username, reg_password, reg_confirm, reg_contact, reg_address],
+    )
+
+# ==================== 应用启动入口 ====================
 
 if __name__ == "__main__":
     """
@@ -754,27 +1113,32 @@ if __name__ == "__main__":
     访问地址:
         本地: http://127.0.0.1:7860
         公网: 需设置 share=True
-    
-    安全说明:
-        - allowed_paths 中的文件可被所有登录用户访问
-        - 建议生产环境使用更安全的认证方式（如密码加密）
     """
-    # 获取图片目录的绝对路径
-    image_dir_absolute = os.path.abspath(IMAGE_DIR)
-    
     try:
-        # 启动应用
-        app.launch(
-            inbrowser=True,
-            share=False,
-            allowed_paths=[image_dir_absolute],  # 使用绝对路径
-            auth=authenticate,  # 使用自定义认证函数
-            auth_message="🔐 请登录物品复活平台\n\n默认账号:\n用户名: admin 密码: admin123\n用户名: user1 密码: password1"
+        # 挂载注册页（无需登录）
+        gr.mount_gradio_app(
+            app,
+            register_page,
+            path=REGISTER_PATH,
         )
-        # allowed_paths: List of complete filepaths or parent directories that gradio is allowed to serve. 
-        # Must be absolute paths. Warning: if you provide directories, any files in these directories or their subdirectories are accessible to all users of your app. Can be set by comma separated environment variable GRADIO_ALLOWED_PATHS. These files are generally assumed to be secure and will be displayed in the browser when possible. 
-    except Exception as e:
-        # 如果出错，打印错误详情
+
+        # 挂载主应用（需要登录）
+        gr.mount_gradio_app(
+            app,
+            main_ui,
+            path=MAIN_PATH,
+            auth=authenticate,
+            auth_message=(
+                "🔐 请登录物品复活平台\n\n"
+                "默认账号:\n用户名: admin 密码: admin123\n用户名: user1 密码: password1\n\n"
+                "新用户请先打开 /register 进行注册；注册后需管理员批准才能登录。"
+            ),
+            # auth: If provided, username and password (or list of username-password tuples) required to access the gradio app. Can also provide function that takes username and password and returns True if valid login.
+            # auth_message: If provided, HTML message provided on login page for this gradio app.
+            allowed_paths=[IMAGE_DIR],
+        )
+
+        uvicorn.run(app, host="127.0.0.1", port=7861)
+    except Exception:
         traceback.print_exc()
-        # 关键：卡住窗口，不让它立刻关闭
         input("程序发生严重错误，请截图发给开发者。按回车键退出...")

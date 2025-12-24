@@ -24,7 +24,9 @@ cursor.execute('''
         username TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         role TEXT DEFAULT 'user',
-        status TEXT DEFAULT 'pending'
+        status TEXT DEFAULT 'pending',
+        contact TEXT NOT NULL,
+        address TEXT NOT NULL
     )
 ''')
 
@@ -39,10 +41,8 @@ cursor.execute('''
         contact TEXT,
         image TEXT,
         create_time TEXT,
-        owner_id INTEGER NOT NULL,
         address TEXT,
-        attributes TEXT,
-        FOREIGN KEY (owner_id) REFERENCES users(id)
+        attributes TEXT
     )
 ''')
 
@@ -62,12 +62,14 @@ try:
                 user.get('username'),
                 user.get('password'),
                 user.get('role', 'user'),    # 默认值 'user'
-                user.get('status', 'pending') # 默认值 'pending'
+                user.get('status', 'pending'), # 默认值 'pending'
+                user.get('contact'),
+                user.get('address')
             )
             user_rows.append(row)
             
         # 批量插入
-        cursor.executemany('INSERT INTO users (id, username, password, role, status) VALUES (?, ?, ?, ?, ?)', user_rows)
+        cursor.executemany('INSERT INTO users (id, username, password, role, status, contact, address) VALUES (?, ?, ?, ?, ?, ?, ?)', user_rows)
         print(f"成功插入 {len(user_rows)} 条用户数据。")
 
 except FileNotFoundError:
@@ -92,7 +94,6 @@ try:
                 item.get('contact'),
                 item.get('image', None),     # 默认值为 None
                 item.get('create_time'),
-                item.get('owner_id'),
                 item.get('address'),
                 item.get('attributes', None),
             )
@@ -100,8 +101,8 @@ try:
             
         # 批量插入
         cursor.executemany('''
-            INSERT INTO items (id, name, category, description, contact, image, create_time, owner_id, address, attributes) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO items (id, name, category, description, contact, image, create_time, address, attributes) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', item_rows)
         print(f"成功插入 {len(item_rows)} 条物品数据。")
 
