@@ -1,5 +1,6 @@
-fastapi==0.124.4
-gradio==6.1.0
+fastapi==0.127.0
+gradio==6.2.0
 Pillow==12.0.0
 python-dotenv==1.2.1
 qrcode==8.2
+uvicorn==0.40.0

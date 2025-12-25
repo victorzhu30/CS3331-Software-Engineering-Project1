@@ -189,33 +189,32 @@ def upsert_category(
     categories = get_categories()
     fields_map = get_category_fields()
 
-    # 改名：old_name 存在且不同
-    if old_name and old_name != new_name:
-        if new_name in categories:
-            return False, "新类型名称已存在"
-        if old_name not in categories:
-            # 旧的不存在，则当作新增
-            old_name = None
-        else:
-            # 替换列表项
-            categories = [new_name if c == old_name else c for c in categories]
-            # 迁移字段定义
-            fields_map[new_name] = normalized_fields
-            if old_name in fields_map:
-                fields_map.pop(old_name, None)
-
+    # --- 核心逻辑：互斥分支 (if - elif - else) ---
+    # 三种情况：
+    # A) old_name 为空，new_name不为空：新增类别
     if not old_name:
-        # 新增
         if new_name in categories:
-            # 当作更新
+            # 新增一个已存在的名字，视为更新
             fields_map[new_name] = normalized_fields
         else:
             categories.append(new_name)
             fields_map[new_name] = normalized_fields
-    else:
-        # 更新
+
+    # B) old_name 不为空，new_name 不为空且 old_name 不等于 new_name：改名类别
+    elif old_name != new_name:
+        if new_name in categories:
+            return False, "新类型名称已存在，不能改名为已有名称"
         if old_name not in categories:
-            categories.append(old_name)
+            return False, "旧类型名称不存在，无法改名"
+        # 替换列表项 (保序)
+        categories = [new_name if c == old_name else c for c in categories]
+        
+        # 迁移字段定义
+        fields_map[new_name] = normalized_fields
+        fields_map.pop(old_name, None)
+
+    # C) old_name 不为空，new_name 不为空且 old_name 等于 new_name：仅更新属性
+    else:
         fields_map[old_name] = normalized_fields
 
     # 兜底：确保“其他”存在

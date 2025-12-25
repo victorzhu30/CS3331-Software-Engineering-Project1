@@ -11,7 +11,8 @@
     "文具",
     "玩具",
     "乐器",
-    "其他"
+    "其他",
+    "学习"
   ],
   "category_fields": {
     "书籍": [
@@ -74,13 +75,6 @@
         "required": false
       }
     ],
-    "票券": [
-      {
-        "key": "valid_until",
-        "label": "有效期",
-        "required": false
-      }
-    ],
     "衣饰": [
       {
         "key": "size",
@@ -133,6 +127,20 @@
         "required": false
       }
     ],
-    "其他": []
+    "其他": [],
+    "票券": [
+      {
+        "key": "valid_until",
+        "label": "有效期",
+        "required": false
+      }
+    ],
+    "学习": [
+      {
+        "key": "usage",
+        "label": "用途",
+        "required": true
+      }
+    ]
   }
 }

@@ -92,7 +92,7 @@ def read_main():
         </head>
         <body>
             <div class="container">
-                <h1>欢迎使用系统</h1>
+                <h1>欢迎使用物品复活平台</h1>
                 <p>请根据您的需求选择进入的页面</p>
                 <div class="btn-group">
                     <a href="{MAIN_PATH}" class="btn btn-main">进入主应用 (需要登录)</a>
@@ -765,22 +765,18 @@ def admin_category_save(selected_category: str, new_name: str, fields_json: str,
     prefix = "✅ " if ok else "❌ "
 
     cats = category_config.get_categories()
-    final_name = (new_name or "").strip()
-    cat_select_upd = gr.update(choices=cats, value=(final_name if ok else (selected_category or None)))
+    cat_select_upd = gr.update(choices=cats, value=None)
     add_upd, search_upd = _dropdown_updates_after_category_change()
-    # 保存成功后刷新 JSON（按规范化后的格式回填）
-    fields_back = category_config.get_fields_json_for_category(final_name) if ok else (fields_json or "[]")
 
     return (
         prefix + msg,
         _render_category_config_html(),
         cat_select_upd,
-        (final_name if ok else (new_name or "")),
-        fields_back,
+        gr.update(value=None),
+        gr.update(value=None),
         add_upd,
         search_upd,
     )
-
 
 def admin_category_delete(selected_category: str, request: gr.Request | None):
     if not _is_admin_request(request):
@@ -1026,7 +1022,7 @@ with gr.Blocks(title="物品复活平台 - 首页", css=custom_css) as main_ui:
                     value=None,
                     label="选择要编辑的类型",
                 )
-                cat_name = gr.Textbox(label="修改类型名称", placeholder="例如：家具")
+                cat_name = gr.Textbox(label="修改/新增类型名称", placeholder="例如：家具")
             with gr.Column(scale=2):
                 cat_fields = gr.Textbox(
                     label="属性定义（JSON 数组）",
