@@ -6,16 +6,20 @@ def row_to_dict(row: sqlite3.Row | None) -> dict | None:
         return None
     return {k: row[k] for k in row.keys()}
 
+
 def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
-    """
-    """
+    """ """
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return any(r[1] == column for r in rows)
 
-def _ensure_column(conn: sqlite3.Connection, table: str, column: str, column_def_sql: str) -> None:
+
+def _ensure_column(
+    conn: sqlite3.Connection, table: str, column: str, column_def_sql: str
+) -> None:
     if _column_exists(conn, table, column):
         return
     conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_def_sql}")
+
 
 def _get_db_connection(DB_FILE) -> sqlite3.Connection:
     """创建 SQLite 连接，并启用 Row 工厂便于按列名取值。"""
@@ -29,6 +33,7 @@ def _get_db_connection(DB_FILE) -> sqlite3.Connection:
     开启后：SQLite 返回的是 Row 对象。它更像一个字典，你可以通过 row["username"] 来取值。这也是为什么你后续能使用 row_to_dict 函数的前提。
     """
     return conn
+
 
 def _ensure_db_schema(DB_FILE) -> None:
     """确保数据库表存在；即便没运行 init_db.py 也能启动应用。"""
@@ -72,7 +77,9 @@ def _ensure_db_schema(DB_FILE) -> None:
         _ensure_column(conn, "items", "address", "address TEXT")
         _ensure_column(conn, "items", "attributes", "attributes TEXT")
 
+
 # ==================== 用户管理功能模块 ====================
+
 
 def load_users(DB_FILE):
     """
@@ -82,6 +89,7 @@ def load_users(DB_FILE):
     with _get_db_connection(DB_FILE) as conn:
         rows = conn.execute("SELECT username, password FROM users").fetchall()
         return {row["username"]: row["password"] for row in rows}
+
 
 def get_user_by_username(username: str, DB_FILE) -> dict | None:
     _ensure_db_schema(DB_FILE)
@@ -96,7 +104,10 @@ def get_user_by_username(username: str, DB_FILE) -> dict | None:
         ).fetchone()
     return row_to_dict(row)
 
-def authenticate_user(username: str, password: str, DB_FILE, require_approved: bool = True) -> bool:
+
+def authenticate_user(
+    username: str, password: str, DB_FILE, require_approved: bool = True
+) -> bool:
     """校验用户名和密码；可选要求 status=approved 才允许登录。"""
     user = get_user_by_username(username, DB_FILE)
     if not user:
@@ -105,7 +116,10 @@ def authenticate_user(username: str, password: str, DB_FILE, require_approved: b
         return False
     return user.get("password") == password
 
-def register_user(username: str, password: str, contact: str, address: str, DB_FILE) -> tuple[bool, str]:
+
+def register_user(
+    username: str, password: str, contact: str, address: str, DB_FILE
+) -> tuple[bool, str]:
     """注册普通用户，默认状态 pending，等待管理员审批。"""
     _ensure_db_schema(DB_FILE)
     username = (username or "").strip()
@@ -137,6 +151,7 @@ def register_user(username: str, password: str, contact: str, address: str, DB_F
     except sqlite3.IntegrityError:
         return False, "用户名已存在"
 
+
 def list_pending_users(DB_FILE) -> list[dict]:
     _ensure_db_schema(DB_FILE)
     with _get_db_connection(DB_FILE) as conn:
@@ -149,6 +164,7 @@ def list_pending_users(DB_FILE) -> list[dict]:
             """
         ).fetchall()
     return [row_to_dict(r) for r in rows]
+
 
 def approve_user(target_username: str, DB_FILE) -> tuple[bool, str]:
     _ensure_db_schema(DB_FILE)
@@ -172,7 +188,17 @@ def approve_user(target_username: str, DB_FILE) -> tuple[bool, str]:
         )
     return True, "已批准该用户"
 
-def add_user(username: str, password: str, DB_FILE, *, role: str = "user", status: str = "approved", contact: str = "", address: str = "") -> bool:
+
+def add_user(
+    username: str,
+    password: str,
+    DB_FILE,
+    *,
+    role: str = "user",
+    status: str = "approved",
+    contact: str = "",
+    address: str = "",
+) -> bool:
     """新增用户（兼容接口）。
 
     注意：users 表里 contact/address 为 NOT NULL（初始化脚本如此），因此这里也要求传入。
@@ -200,7 +226,9 @@ def add_user(username: str, password: str, DB_FILE, *, role: str = "user", statu
     except sqlite3.IntegrityError:
         return False
 
+
 # ==================== 数据存储管理模块 ====================
+
 
 def load_items(DB_FILE):
     _ensure_db_schema(DB_FILE)
@@ -255,4 +283,3 @@ def save_items(items, DB_FILE):
             """,
             rows,
         )
-        

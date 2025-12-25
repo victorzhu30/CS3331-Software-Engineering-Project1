@@ -11,8 +11,10 @@ from constants import MAX_DYNAMIC_FIELDS
 
 CONFIG_FILE_NAME = "category_config.json"
 
+
 def _config_path() -> str:
     return get_path_for_write(CONFIG_FILE_NAME)
+
 
 def _normalize_field(field: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(field, dict):
@@ -27,8 +29,11 @@ def _normalize_field(field: dict[str, Any]) -> dict[str, Any] | None:
 
     return {"key": key, "label": label, "required": required}
 
+
 def _validate_config(categories: Any, category_fields: Any) -> tuple[bool, str]:
-    if not isinstance(categories, list) or not all(isinstance(c, str) for c in categories):
+    if not isinstance(categories, list) or not all(
+        isinstance(c, str) for c in categories
+    ):
         return False, "categories 必须是字符串数组"
 
     categories = [c.strip() for c in categories if str(c).strip()]
@@ -58,15 +63,18 @@ def _validate_config(categories: Any, category_fields: Any) -> tuple[bool, str]:
     # category_fields 里的类别不强制必须都在 categories 中（允许残留）；但保存时会同步
     return True, "OK"
 
+
 def _read_json(path: str) -> Any:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
 
 def _atomic_write_json(path: str, payload: Any) -> None:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     os.replace(tmp, path)
+
 
 def load_config() -> dict[str, Any]:
     """加载类别配置。
@@ -91,17 +99,24 @@ def load_config() -> dict[str, Any]:
 
     return {
         "categories": list(DEFAULT_CATEGORIES),
-        "category_fields": json.loads(json.dumps(DEFAULT_CATEGORY_FIELDS, ensure_ascii=False)),
+        "category_fields": json.loads(
+            json.dumps(DEFAULT_CATEGORY_FIELDS, ensure_ascii=False)
+        ),
     }
 
-def save_config(categories: list[str], category_fields: dict[str, list[dict[str, Any]]]) -> tuple[bool, str]:
+
+def save_config(
+    categories: list[str], category_fields: dict[str, list[dict[str, Any]]]
+) -> tuple[bool, str]:
     ok, msg = _validate_config(categories, category_fields)
     if not ok:
         return False, msg
 
     # 保存时做一次同步与清理：
     categories = [c.strip() for c in categories if str(c).strip()]
-    category_fields = {str(k).strip(): v for k, v in category_fields.items() if str(k).strip()}
+    category_fields = {
+        str(k).strip(): v for k, v in category_fields.items() if str(k).strip()
+    }
 
     # 确保每个类别都有字段列表
     for c in categories:
@@ -111,9 +126,12 @@ def save_config(categories: list[str], category_fields: dict[str, list[dict[str,
     _atomic_write_json(_config_path(), payload)
     return True, "已保存类别配置"
 
+
 def get_categories() -> list[str]:
     cfg = load_config()
-    categories: list[str] = [str(c).strip() for c in cfg.get("categories", []) if str(c).strip()]
+    categories: list[str] = [
+        str(c).strip() for c in cfg.get("categories", []) if str(c).strip()
+    ]
     if "其他" not in categories:
         categories.append("其他")
     # 去重但保序
@@ -125,13 +143,18 @@ def get_categories() -> list[str]:
             seen.add(c)
     return out
 
+
 def get_category_fields() -> dict[str, list[dict[str, Any]]]:
     cfg = load_config()
     raw = cfg.get("category_fields") or {}
     out: dict[str, list[dict[str, Any]]] = {}
     if isinstance(raw, dict):
         for cat, fields in raw.items():
-            if not isinstance(cat, str) or not cat.strip() or not isinstance(fields, list):
+            if (
+                not isinstance(cat, str)
+                or not cat.strip()
+                or not isinstance(fields, list)
+            ):
                 continue
             normalized: list[dict[str, Any]] = []
             for f in fields:
@@ -145,10 +168,12 @@ def get_category_fields() -> dict[str, list[dict[str, Any]]]:
         out.setdefault(c, [])
     return out
 
+
 def get_fields_json_for_category(category: str) -> str:
     category = (category or "").strip()
     fields = get_category_fields().get(category, [])
     return json.dumps(fields, ensure_ascii=False, indent=2)
+
 
 def upsert_category(
     old_name: str | None,
@@ -208,7 +233,7 @@ def upsert_category(
             return False, "旧类型名称不存在，无法改名"
         # 替换列表项 (保序)
         categories = [new_name if c == old_name else c for c in categories]
-        
+
         # 迁移字段定义
         fields_map[new_name] = normalized_fields
         fields_map.pop(old_name, None)
@@ -223,6 +248,7 @@ def upsert_category(
 
     ok, msg = save_config(categories, fields_map)
     return ok, msg
+
 
 def delete_category(name: str) -> tuple[bool, str]:
     name = (name or "").strip()
